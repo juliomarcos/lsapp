@@ -1,6 +1,13 @@
 local dbg = {}
 
+function dbg.print_src_name(info, last_char)
+    last_char = last_char or '\n'
+    io.write(info.source, ':', info.currentline, ':', info.name, '()', last_char)
+end
+
 function dbg.logarr(arr)
+    dbg.print_src_name(debug.getinfo(2))
+
     io.write('[')
     for _, t in ipairs(arr) do
         io.write(tostring(t) .. ', ')
@@ -29,6 +36,7 @@ local function pretty_print_obj(obj, level, print_start)
 end
 
 function dbg.logobj(obj)
+    dbg.print_src_name(debug.getinfo(2))
     pretty_print_obj(obj, 0, true)
 end
 

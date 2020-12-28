@@ -163,8 +163,8 @@ local command_parsers = {
 }
 
 function cmd.parse(expr_tokens)
-    log.d('parse_command(..)')
-    dbg.logobj(expr_tokens)
+    --log.d('parse_command(..)')
+    --dbg.logobj(expr_tokens)
     local token = expr_tokens:next_token()
     if token == nil then return ast.no_op_node end
 

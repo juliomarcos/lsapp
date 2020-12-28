@@ -20,4 +20,12 @@ function fn.max_element(list, fn)
     return max
 end
 
+function fn.dup(list)
+    local d = {}
+    for i=1,#list do
+        d[#d+1] = list[i]
+    end
+    return d
+end
+
 return fn
