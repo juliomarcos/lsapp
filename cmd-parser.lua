@@ -2,7 +2,6 @@ local log = require('log')
 local ast = require('ast')
 local vl = require('validation')
 local lexer = require('lin-lexer')
-local dbg = require('dbg')
 local Tape = require('tape-buffer').Tape
 
 local cmd = {}
@@ -142,6 +141,24 @@ local function find_line_target(expr_tape)
     }
 end
 
+local function parse_identifier(expr_tokens)
+    return {
+        type = ast.NodeTypes.LineReference,
+        identifier = expr_tokens:next_token().literal
+    }
+end
+
+local function parse_assignment(expr_tokens)
+    local line_target = parse_identifier(expr_tokens)
+    expr_tokens:next_token() -- assignment operator
+    local expr = parse_expression(expr_tokens)
+    return {
+        type = ast.NodeTypes.Assignment,
+        lvalue = line_target.identifier,
+        expression = expr
+    }
+end
+
 local function parse_line_operation(expr_tokens)
     local line_target = find_line_target(expr_tokens)
     local expression = parse_expression(expr_tokens)
@@ -153,11 +170,50 @@ local function parse_keyword_cmd(keyword)
     return ast.keyword_cmd(keyword.type)
 end
 
-local function parse_line_assignment(expr_tokens)
+local function parse_assignment_or_self_assignment(expr_tokens)
+    local line_target = parse_identifier(expr_tokens)
+    local next_token = expr_tokens:next_token()
+    if next_token.type == CmdTokens.Assignment then
+        expr_tokens:rewind()
+        return parse_assignment(expr_tokens)
+    else
+        expr_tokens:rewind()
+        local expr = parse_expression(expr_tokens)
+        return {
+            type = ast.NodeTypes.Assignment,
+            lvalue = line_target.identifier,
+            expression = expr
+        }
+    end
+end
+
+local function parse_unary_negate(expr_tokens)
+    local operation = expr_tokens:next_token()
+    if operation.literal ~= '-' then
+        local msg = string.format('the only unary operator supported is "-". "%s" was given instead.',
+                operation.literal)
+        return log.se(msg)
+    end
+
+    local identifier_tok = expr_tokens:next_token()
+    if identifier_tok.type ~= CmdTokens.Identifier then
+        --require('mobdebug').start()
+        return log.se('a line identifier was expected. found ' .. identifier_tok.literal)
+    end
+
+    return {
+        type = ast.NodeTypes.Assignment,
+        lvalue = identifier_tok.literal,
+        expression = ast.operation(
+                ast.value_node(lexer.produce_token(CmdTokens.Number, '-1')),
+                '*',
+                ast.line_ref_node(identifier_tok))
+    }
 end
 
 local command_parsers = {
-    [CmdTokens.Identifier] = parse_line_operation,
+    [CmdTokens.Identifier] = parse_assignment_or_self_assignment,
+    [CmdTokens.Operator] = parse_unary_negate,
     [CmdTokens.Number] = parse_line_operation,
     [CmdTokens.Quit] = parse_keyword_cmd
 }
@@ -165,6 +221,7 @@ local command_parsers = {
 function cmd.parse(expr_tokens)
     --log.d('parse_command(..)')
     --dbg.logobj(expr_tokens)
+
     local token = expr_tokens:next_token()
     if token == nil then return ast.no_op_node end
 

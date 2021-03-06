@@ -7,7 +7,7 @@ ast.NodeTypes = {
     Value = 'value',
     LineReference = 'line_ref',
     VirtualLine = 'virtual_line',
-    SelfAssignment = 'self_assignment',
+    Assignment = 'assignment',
     Operation = 'operation',
     NoOp = 'nop',
     Quit = 'quit',
@@ -18,8 +18,8 @@ function ast.line_op(line_target, expression)
         return log.se(string.format('"%s" is an invalid line name.', line_target.identifier))
     end
     return {
-        type = ast.NodeTypes.SelfAssignment,
-        target = line_target.identifier,
+        type = ast.NodeTypes.Assignment,
+        lvalue = line_target.identifier,
         expression = expression
     }
 end

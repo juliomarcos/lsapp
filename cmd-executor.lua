@@ -23,19 +23,34 @@ local function no_op_exe()
     log.d('no op')
 end
 
-local function process_add(expression)
+local function process_add(system, lhs, rhs)
+    if lhs.type ~= rhs.type then
+        return log.se('undefined operation, both operands must be line references.')
+    end
 
+    local result = {}
+    for i=1, #lhs.line do
+        result[i] = lhs.line[i] + rhs.line[i]
+    end
+    return result
 end
 
-local function process_sub(expression)
+local function process_sub(system, lhs, rhs)
+    if lhs.type ~= rhs.type then
+        return log.se('undefined operation, both operands must be line references.')
+    end
 
+    local result = {}
+    for i=1, #lhs.line do
+        result[i] = lhs.line[i] - rhs.line[i]
+    end
+    return result
 end
 
 local function process_mul(system, lhs, rhs)
-    --dbg.logobj(system)
     local value_node, ref_node
     if lhs.type == rhs.type then
-        return log.se('one of the two operands must be a line ref and the other a value.')
+        return log.se('undefined operation, one of the two operands must be a line ref and the other a value.')
     end
 
     if lhs.type == ast.NodeTypes.Value then
@@ -46,7 +61,6 @@ local function process_mul(system, lhs, rhs)
         ref_node = lhs
     end
 
-
     local virtual_line = ref_node.line
     local value = value_node.value
     for k, v in pairs(virtual_line) do
@@ -54,8 +68,25 @@ local function process_mul(system, lhs, rhs)
     end
 end
 
-local function process_div(expression)
+local function process_div(system, lhs, rhs)
+    local value_node, ref_node
+    if lhs.type == rhs.type then
+        return log.se('undefined operation, one of the two operands must be a line ref and the other a value.')
+    end
 
+    if lhs.type == ast.NodeTypes.Value then
+        value_node = lhs
+        ref_node = rhs
+    else
+        value_node = rhs
+        ref_node = lhs
+    end
+
+    local virtual_line = ref_node.line
+    local value = value_node.value
+    for k, v in pairs(virtual_line) do
+        virtual_line[k] = v/value
+    end
 end
 
 local Operations = {
@@ -84,7 +115,14 @@ local function amplify_line_refs(system, node)
     amplify_line_refs_dfs(node)
 end
 
-local function reduce_node(node)
+local function reduce_node(node, operation_result)
+    if operation_result ~= nil then
+        return {
+            type = ast.NodeTypes.VirtualLine,
+            line = operation_result
+        }
+    end
+
     local virtual_line_node = node.lhs
     if virtual_line_node.type ~= ast.NodeTypes.VirtualLine then
         virtual_line_node = node.rhs
@@ -96,9 +134,18 @@ local function process_expression(system, node)
     amplify_line_refs(system, node)
 
     local op_fn = Operations[node.op]
-    op_fn(system, node.lhs, node.rhs)
 
-    return reduce_node(node)
+    -- recursively reduce operations
+    if node.lhs.type == ast.NodeTypes.Operation then
+        node.lhs = process_expression(system, node.lhs)
+    end
+    if node.rhs.type == ast.NodeTypes.Operation then
+        node.rhs = process_expression(system, node.rhs)
+    end
+
+    local result = op_fn(system, node.lhs, node.rhs)
+
+    return reduce_node(node, result)
 end
 
 local function self_assignment_exe(system, node)
@@ -108,13 +155,19 @@ local function self_assignment_exe(system, node)
     system[target_line_number] = resulting_node.line
 end
 
+local function assignment_exe(system, node)
+    local resulting_node = process_expression(system, node.expression)
+    local target_line_number = tonumber(node.lvalue:sub(2))
+    system[target_line_number] = resulting_node.line
+end
+
 local function operation_exe(node)
 
 end
 
 local node_executors = {
     [ast.NodeTypes.NoOp] = no_op_exe,
-    [ast.NodeTypes.SelfAssignment] = self_assignment_exe,
+    [ast.NodeTypes.Assignment] = assignment_exe,
     [ast.NodeTypes.Operation] = operation_exe,
     [ast.NodeTypes.Quit] = graceful_quit
 }
