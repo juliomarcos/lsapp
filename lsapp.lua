@@ -1,10 +1,10 @@
 local cmd_parser = require('cmd-parser')
 local CmdExecutor = require('cmd-executor').CmdExecutor
 local linfmt = require('lin-format')
-local ast = require('ast')
+local log = require "log"
 
 -- local filename = 'data/system-2-infer-0s.lin'
- local filename = 'data/brl-3u.lin'
+ local filename = 'data/brl-gauss-1.lin'
 --local filename = 'data/thaisinha-destruidora.lin'
 
 local equations = linfmt.read_file(filename)
@@ -19,8 +19,13 @@ while 1 do
     --local user_input = '-l3'
     --print(user_input)
     local user_input = io.read()
+    --require('mobdebug').start()
     local cmd_tokens = cmd_parser.lex(user_input)
-    local node = cmd_parser.parse(cmd_tokens) or ast.no_op_node
-    cmd_exe:interpret_node(node)
+    local st, node = pcall(function() return cmd_parser.parse(cmd_tokens) end)
+    if not st then
+        log.se "unidentified syntax error"
+    else
+        cmd_exe:interpret_node(node)
+    end
     linfmt.pretty_print_equations(equations)
 end

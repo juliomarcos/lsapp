@@ -67,7 +67,19 @@ function cmd.lex(input)
         elseif c:match('%a') then
             token = read_identifier(c, tape)
             -- is it an operator?
-        elseif c:match('[%+%-%*/]') then
+        elseif c == '-' then
+            -- might be an operator, a negative number or a negative line
+            local d = tape:get_next_char()
+            if d:match('%d') then
+                tape:rotate(-1)
+                token = lexer.read_number('-', tape)
+            elseif d:match('%a') then
+                all_tokens[#all_tokens + 1] = read_operator('-')
+                token = read_identifier(d, tape)
+            else
+                token = read_operator(c)
+            end
+        elseif c:match('[%+%*/]') then
             token = read_operator(c)
             -- only other choice is number
         else
@@ -197,7 +209,6 @@ local function parse_unary_negate(expr_tokens)
 
     local identifier_tok = expr_tokens:next_token()
     if identifier_tok.type ~= CmdTokens.Identifier then
-        --require('mobdebug').start()
         return log.se('a line identifier was expected. found ' .. identifier_tok.literal)
     end
 
