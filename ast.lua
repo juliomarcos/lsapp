@@ -8,9 +8,11 @@ ast.NodeTypes = {
     LineReference = 'line_ref',
     VirtualLine = 'virtual_line',
     Assignment = 'assignment',
+    Swap = 'swap',
     Operation = 'operation',
     NoOp = 'nop',
     Quit = 'quit',
+    Undo = 'undo',
 }
 
 function ast.line_op(line_target, expression)

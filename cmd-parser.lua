@@ -8,8 +8,10 @@ local cmd = {}
 
 local CmdTokens = {
     Quit = 'quit',
+    Undo = 'undo',
     Identifier = 'identifier',
     Assignment = 'assignment',
+    Swap = 'swap',
     Operator = 'operator',
     Number = 'number',
     NoOp = 'nop',
@@ -33,17 +35,17 @@ local function read_identifier(c, buffer)
     local literal = table.concat(name)
     if literal == 'q' or literal == 'quit' then
         return lexer.produce_token(CmdTokens.Quit)
+    elseif literal == 's' or literal == 'swap' then
+        return lexer.produce_token(CmdTokens.Swap)
+    elseif literal == 'u' or literal == 'undo' then
+        return lexer.produce_token(CmdTokens.Undo)
     else
         return lexer.produce_token(CmdTokens.Identifier, literal)
     end
 end
 
-local function read_operator(c)
-    return lexer.produce_token(CmdTokens.Operator, c)
-end
-
-local function read_assignment_sign(c)
-    return lexer.produce_token(CmdTokens.Assignment, c)
+local function read_unary_sign(c, cmd_token)
+    return lexer.produce_token(cmd_token, c)
 end
 
 function cmd.lex(input)
@@ -62,11 +64,11 @@ function cmd.lex(input)
 
         -- is it an assignment sign
         if c == '=' then
-            token = read_assignment_sign(c)
-            -- is it an identifier?
+            token = read_unary_sign(c, CmdTokens.Assignment)
+        -- is it an identifier (keywords/commands also go here)?
         elseif c:match('%a') then
             token = read_identifier(c, tape)
-            -- is it an operator?
+        -- is it an operator?
         elseif c == '-' then
             -- might be an operator, a negative number or a negative line
             local d = tape:get_next_char()
@@ -77,10 +79,10 @@ function cmd.lex(input)
                 all_tokens[#all_tokens + 1] = read_operator('-')
                 token = read_identifier(d, tape)
             else
-                token = read_operator(c)
+                token = read_unary_sign(c, CmdTokens.Operator)
             end
         elseif c:match('[%+%*/]') then
-            token = read_operator(c)
+            token = read_unary_sign(c, CmdTokens.Operator)
             -- only other choice is number
         else
             token = lexer.read_number(c, tape)
@@ -178,7 +180,8 @@ local function parse_line_operation(expr_tokens)
     return ast.line_op(line_target, expression)
 end
 
-local function parse_keyword_cmd(keyword)
+local function parse_keyword_cmd(expr_tokens)
+    local keyword = expr_tokens:next_token()
     return ast.keyword_cmd(keyword.type)
 end
 
@@ -222,11 +225,43 @@ local function parse_unary_negate(expr_tokens)
     }
 end
 
+local function promote_number_to_line_identifier(token)
+    if token.type == CmdTokens.Number then
+        return lexer.produce_token(CmdTokens.Identifier, 'l' .. token.literal)
+    else
+        return token
+    end
+end
+
+local function parse_swap_lines_operation(expr_tokens)
+    expr_tokens:next_token() -- swap token
+    local line_a_identifier = expr_tokens:next_token()
+    local line_b_identifier = expr_tokens:next_token()
+
+    line_a_identifier = promote_number_to_line_identifier(line_a_identifier)
+    line_b_identifier = promote_number_to_line_identifier(line_b_identifier)
+
+    if line_a_identifier.type ~= CmdTokens.Identifier then
+        return log.se('a line identifier was expected. found' .. line_a_identifier.type)
+    end
+    if line_b_identifier.type ~= CmdTokens.Identifier then
+        return log.se('a line identifier was expected. found' .. line_b_identifier.type)
+    end
+
+    return {
+        type = ast.NodeTypes.Swap,
+        a = line_a_identifier.literal,
+        b = line_b_identifier.literal,
+    }
+end
+
 local command_parsers = {
     [CmdTokens.Identifier] = parse_assignment_or_self_assignment,
     [CmdTokens.Operator] = parse_unary_negate,
     [CmdTokens.Number] = parse_line_operation,
-    [CmdTokens.Quit] = parse_keyword_cmd
+    [CmdTokens.Quit] = parse_keyword_cmd,
+    [CmdTokens.Undo] = parse_keyword_cmd,
+    [CmdTokens.Swap] = parse_swap_lines_operation,
 }
 
 function cmd.parse(expr_tokens)

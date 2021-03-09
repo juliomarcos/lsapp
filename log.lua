@@ -5,6 +5,11 @@ function log.se(msg)
     return false
 end
 
+function log.exr(msg)
+    print('[execution error] ' .. msg)
+    return false
+end
+
 function log.d(...)
     local msg = table.concat({...})
     print('[debug] ' .. msg)

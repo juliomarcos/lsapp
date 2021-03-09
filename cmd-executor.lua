@@ -1,8 +1,8 @@
 local log = require('log')
-local dbg = require('dbg')
 local ast = require('ast')
 local fn = require('functional')
 
+local history = {}
 local exe = {}
 local CmdExecutor = {}
 CmdExecutor.__index = CmdExecutor
@@ -85,7 +85,11 @@ local function process_div(system, lhs, rhs)
     local virtual_line = ref_node.line
     local value = value_node.value
     for k, v in pairs(virtual_line) do
-        virtual_line[k] = v/value
+        local new_value = v/value
+        if math.abs(new_value - math.tointeger(new_value)) < 0.0001 then
+            new_value = math.tointeger(new_value)
+        end
+        virtual_line[k] = new_value
     end
 end
 
@@ -161,20 +165,56 @@ local function assignment_exe(system, node)
     system[target_line_number] = resulting_node.line
 end
 
-local function operation_exe(node)
+local function swap_exe(system, node)
+    local line_a = tonumber(node.a:sub(2))
+    local line_b = tonumber(node.b:sub(2))
+    system[line_a], system[line_b] = system[line_b], system[line_a]
+end
 
+local function undo_exe(system, node)
+    local old_system = table.remove(history, #history)
+    for i, row in ipairs(system) do
+        for j, _ in ipairs(row) do
+            row[j] = old_system[i][j]
+        end
+    end
 end
 
 local node_executors = {
     [ast.NodeTypes.NoOp] = no_op_exe,
     [ast.NodeTypes.Assignment] = assignment_exe,
-    [ast.NodeTypes.Operation] = operation_exe,
-    [ast.NodeTypes.Quit] = graceful_quit
+    [ast.NodeTypes.Swap] = swap_exe,
+    [ast.NodeTypes.Undo] = undo_exe,
+    [ast.NodeTypes.Quit] = graceful_quit,
 }
+
+local function dup_system(original_system)
+    local copy = {}
+    for i, _ in ipairs(original_system) do
+        local row = {}
+        for j, v in ipairs(original_system[i]) do
+            row[j] = v
+        end
+        copy[i] = row
+    end
+    return copy
+end
 
 function CmdExecutor.interpret_node(self, node)
     local executor_fn = node_executors[node.type]
-    executor_fn(self.system, node)
+    local system_copy = dup_system(self.system)
+    local st, err = pcall(executor_fn, self.system, node)
+    if not st then
+        log.exr("command was parsed but couldn't be executed.")
+        log.exr(err)
+        self.system = system_copy
+    else
+        -- commit to history
+        history[#history + 1] = system_copy
+    end
+
+    -- to see errors
+    --executor_fn(self.system, node)
 end
 
 exe.CmdExecutor = CmdExecutor
