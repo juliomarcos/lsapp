@@ -87,7 +87,7 @@ function lin.read_file(filename)
     return equations
 end
 
-function lin.pretty_print_equations(all_equations)
+local function pretty_print_equations_showing_variables(all_equations)
     local num_vars = #all_equations[1] - 1
 
     local first_letter = 'x'
@@ -99,7 +99,6 @@ function lin.pretty_print_equations(all_equations)
         local letter = first_letter
 
         -- print variables
-        local line = {}
         for j = 1, #eq - 1 do
             local num = eq[j]
             local fmt = '%3d'
@@ -113,6 +112,25 @@ function lin.pretty_print_equations(all_equations)
         -- print right side
         io.write('  =\t', eq[#eq])
         print()
+    end
+end
+
+local function pretty_print_equations_matrix_form(all_equations)
+    for _, eq in pairs(all_equations) do
+        for j = 1, #eq do
+            local num = eq[j]
+            local fmt = math.type(num) == 'float' and '%3.2f ' or '%3d '
+            io.write(string.format(fmt, num))
+        end
+        print""
+    end
+end
+
+function lin.pretty_print_equations(all_equations, show_variables)
+    if show_variables then
+        pretty_print_equations_showing_variables(all_equations)
+    else
+        pretty_print_equations_matrix_form(all_equations)
     end
 end
 
